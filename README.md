@@ -3,7 +3,7 @@
 这是 `TK新闻精品二创工作台` 的公开启动入口。新电脑在**管理员 PowerShell** 运行：
 
 ```powershell
-irm https://raw.githubusercontent.com/qq541253643-art/tk-news-installer/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/qq541253643-art/tk-news-installer/refs/heads/main/install.ps1 | iex
 ```
 
 安装器会在本机生成一把独立的 Ed25519 密钥，只把公钥复制到剪贴板。请把公钥发给 GitHub 管理电脑，由管理员添加到私有主仓库的 `Settings → Deploy keys`，并保持 `Allow write access` 未勾选。生产电脑不需要登录 GitHub。
