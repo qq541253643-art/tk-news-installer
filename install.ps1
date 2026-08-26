@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [ValidatePattern("^[A-Za-z0-9._-]+$")]
     [string]$Distribution = "Ubuntu",
