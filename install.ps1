@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidatePattern("^[A-Za-z0-9._-]+$")]
     [string]$Distribution = "Ubuntu",
@@ -42,8 +42,114 @@ function Invoke-WslScript {
     }
 }
 
+function Set-WslDownloadNetwork {
+    $minimumBuild = 22621
+    $windowsBuild = [Environment]::OSVersion.Version.Build
+    if ($windowsBuild -lt $minimumBuild) {
+        Write-Warning "Windows 版本低于 Windows 11 22H2，跳过 WSL 镜像网络配置。"
+        return
+    }
+
+    $configPath = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".wslconfig"
+    $settings = [ordered]@{
+        "networkingMode" = "mirrored"
+        "autoProxy" = "true"
+        "dnsTunneling" = "true"
+    }
+    $existingText = if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+        [IO.File]::ReadAllText($configPath)
+    } else { "" }
+    $lines = New-Object System.Collections.Generic.List[string]
+    if (-not [string]::IsNullOrEmpty($existingText)) {
+        foreach ($line in ($existingText -split "`r?`n")) { $lines.Add($line) }
+    }
+
+    $sectionStart = -1
+    $sectionEnd = $lines.Count
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($lines[$index] -match '^\s*\[wsl2\]\s*(?:[;#].*)?$') {
+            $sectionStart = $index
+            for ($cursor = $index + 1; $cursor -lt $lines.Count; $cursor++) {
+                if ($lines[$cursor] -match '^\s*\[[^\]]+\]') {
+                    $sectionEnd = $cursor
+                    break
+                }
+            }
+            break
+        }
+    }
+
+    $configured = $sectionStart -ge 0
+    if ($configured) {
+        foreach ($entry in $settings.GetEnumerator()) {
+            $keyPattern = '^\s*' + [Regex]::Escape($entry.Key) + '\s*='
+            $valuePattern = '^\s*' + [Regex]::Escape($entry.Key) + '\s*=\s*' + [Regex]::Escape($entry.Value) + '\s*(?:[;#].*)?$'
+            $found = $false
+            for ($index = $sectionStart + 1; $index -lt $sectionEnd; $index++) {
+                if ($lines[$index] -match $keyPattern -and $lines[$index] -notmatch $valuePattern) {
+                    $configured = $false
+                }
+                if ($lines[$index] -match $valuePattern) { $found = $true }
+            }
+            if (-not $found) { $configured = $false }
+        }
+    }
+    if ($configured) {
+        Write-Host "[PASS] WSL 下载网络已是推荐配置" -ForegroundColor Green
+        return
+    }
+
+    if ($sectionStart -lt 0) {
+        if ($lines.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($lines[$lines.Count - 1])) {
+            $lines.Add("")
+        }
+        $lines.Add("[wsl2]")
+        foreach ($entry in $settings.GetEnumerator()) {
+            $lines.Add("$($entry.Key)=$($entry.Value)")
+        }
+    }
+    else {
+        $insertAt = $sectionEnd
+        foreach ($entry in $settings.GetEnumerator()) {
+            $keyPattern = '^\s*' + [Regex]::Escape($entry.Key) + '\s*='
+            $matches = New-Object System.Collections.Generic.List[int]
+            for ($index = $sectionStart + 1; $index -lt $insertAt; $index++) {
+                if ($lines[$index] -match $keyPattern) { $matches.Add($index) }
+            }
+            if ($matches.Count -eq 0) {
+                $lines.Insert($insertAt, "$($entry.Key)=$($entry.Value)")
+                $insertAt++
+            }
+            else {
+                $lines[$matches[0]] = "$($entry.Key)=$($entry.Value)"
+                for ($cursor = $matches.Count - 1; $cursor -ge 1; $cursor--) {
+                    $lines.RemoveAt($matches[$cursor])
+                    $insertAt--
+                }
+            }
+        }
+    }
+
+    $backupPath = ""
+    if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+        $backupPath = "$configPath.tk-news-backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+        Copy-Item -LiteralPath $configPath -Destination $backupPath -Force
+    }
+    $temporary = "$configPath.tk-news-$([Guid]::NewGuid().ToString('N')).tmp"
+    [IO.File]::WriteAllText($temporary, (($lines.ToArray() -join "`r`n").TrimEnd() + "`r`n"), $utf8)
+    Move-Item -LiteralPath $temporary -Destination $configPath -Force
+    Write-Host "[PASS] WSL 下载网络已优化，正在重启 WSL 后继续安装" -ForegroundColor Green
+    if (-not [string]::IsNullOrWhiteSpace($backupPath)) {
+        Write-Host "原配置备份：$backupPath"
+    }
+    & wsl.exe --shutdown
+    Start-Sleep -Seconds 4
+}
+
 Write-Host "TK新闻精品二创工作台：一键联网安装" -ForegroundColor Cyan
 Write-Host "安装来源：GitHub 与官方依赖源"
+
+Set-WslDownloadNetwork
 
 & wsl.exe -d $Distribution -- sudo -v
 if ($LASTEXITCODE -ne 0) {

@@ -13,3 +13,5 @@ irm https://raw.githubusercontent.com/qq541253643-art/tk-news-installer/refs/hea
 本仓库只包含可审计的安装脚本和这份说明，不包含私有主项目、GitHub 令牌、私钥、模型、源素材或成片。私钥只保存在生成它的电脑，安装器不会显示、复制或上传私钥。
 
 首次安装仍需要联网下载项目依赖和模型。网络中断后可重新运行同一条命令，安装链会复用已经完成的系统组件、项目目录和 Python 下载缓存。
+
+Windows 11 22H2 及更高版本会在 WSL 下载前自动合并镜像网络、Windows 代理和 DNS 隧道设置。写入前会备份现有 `.wslconfig`，然后同步重启 WSL 并继续原安装流程。
