@@ -186,17 +186,39 @@ Write-Host "安装来源：GitHub 与官方依赖源"
 
 Set-WslDownloadNetwork
 
-& wsl.exe -d $Distribution -- sudo -v
-if ($LASTEXITCODE -ne 0) {
-    throw "Ubuntu sudo 验证失败；请确认当前 Windows 用户可以进入 $Distribution"
-}
-
 $prepareScript = @'
 set -Eeuo pipefail
 [[ "$(id -u)" -ne 0 ]] || { printf "[FAIL] 请使用普通 Ubuntu 用户，不要使用 root\n" >&2; exit 1; }
 command -v sudo >/dev/null 2>&1 || { printf "[FAIL] Ubuntu 缺少 sudo\n" >&2; exit 1; }
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl git openssh-client python3
+required_packages=(
+  build-essential ca-certificates curl ffmpeg fonts-noto-color-emoji git iproute2
+  libgl1 libglib2.0-0 openssh-client python3 python3-pip python3-venv
+)
+missing_packages=()
+for package in "${required_packages[@]}"; do
+  if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -Fqx 'install ok installed'; then
+    missing_packages+=("$package")
+  fi
+done
+current_user="$(id -un)"
+linger_state="$(loginctl show-user "$current_user" -p Linger --value 2>/dev/null || true)"
+if [[ "${#missing_packages[@]}" -gt 0 || "$linger_state" != "yes" ]]; then
+  printf "[INFO] 首次准备系统依赖，只需输入一次 Ubuntu 管理密码\n"
+  sudo -v
+  if [[ "${#missing_packages[@]}" -gt 0 ]]; then
+    sudo apt-get update
+    sudo apt-get install -y "${required_packages[@]}"
+  fi
+  if [[ "$linger_state" != "yes" ]]; then
+    sudo loginctl enable-linger "$current_user"
+  fi
+else
+  printf "[PASS] 系统依赖与常驻服务权限已就绪，不再请求管理密码\n"
+fi
+systemctl --user show-environment >/dev/null 2>&1 || {
+  printf "[FAIL] systemd 用户服务不可用；请在 /etc/wsl.conf 启用 systemd，执行 wsl --shutdown 后重试\n" >&2
+  exit 1
+}
 ssh_dir="$HOME/.ssh"
 key_path="$ssh_dir/tk-news-workbench-deploy"
 known_hosts="$ssh_dir/tk-news-workbench-known-hosts"
@@ -236,16 +258,32 @@ if ($LASTEXITCODE -ne 0 -or -not $publicKey.StartsWith("ssh-ed25519 ")) {
     throw "没有读取到本机公钥；私钥不会显示或复制"
 }
 
-try {
-    Set-Clipboard -Value $publicKey
-    Write-Host "`n本机公钥已复制到剪贴板。" -ForegroundColor Green
-} catch {
-    Write-Warning "无法写入剪贴板，请手动复制下面这一整行公钥。"
+$accessCheck = 'key_path="$HOME/.ssh/tk-news-workbench-deploy"; known_hosts="$HOME/.ssh/tk-news-workbench-known-hosts"; ssh_command="ssh -i $key_path -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts"; GIT_SSH_COMMAND="$ssh_command" timeout 25 git ls-remote "ssh://git@ssh.github.com:443/qq541253643-art/tk-cutout-remix-workbench.git" refs/heads/main'
+$accessOutput = (& wsl.exe -d $Distribution -- bash -lc $accessCheck 2>&1 | Out-String).Trim()
+$accessStatus = $LASTEXITCODE
+$keyAlreadyAuthorized = $accessStatus -eq 0
+if ($keyAlreadyAuthorized) {
+    Write-Host "[PASS] 已复用本机现有 GitHub 只读授权，无需重新绑定" -ForegroundColor Green
 }
-Write-Host "`n$publicKey`n"
-Write-Host "请把公钥发给 GitHub 管理电脑，由管理员添加到仓库 Deploy keys。"
-Write-Host "管理员必须保持 Allow write access 未勾选；本机无需登录 GitHub。" -ForegroundColor Yellow
-[void](Read-Host "管理员添加完成后按 Enter 继续验证")
+elseif ($accessOutput -match 'Permission denied \(publickey\)|Repository not found') {
+    try {
+        Set-Clipboard -Value $publicKey
+        Write-Host "`n本机公钥已复制到剪贴板。" -ForegroundColor Green
+    } catch {
+        Write-Warning "无法写入剪贴板，请手动复制下面这一整行公钥。"
+    }
+    Write-Host "`n$publicKey`n"
+    Write-Host "请把公钥发给 GitHub 管理电脑，由管理员添加到仓库 Deploy keys。"
+    Write-Host "管理员必须保持 Allow write access 未勾选；本机无需登录 GitHub。" -ForegroundColor Yellow
+    [void](Read-Host "管理员添加完成后按 Enter 继续验证")
+}
+elseif ($accessStatus -eq 124) {
+    throw "连接 GitHub SSH 超过 25 秒；现有密钥未被判定失效，请检查 WSL 网络后重试"
+}
+else {
+    $accessReason = if ([string]::IsNullOrWhiteSpace($accessOutput)) { "未知连接错误" } else { $accessOutput }
+    throw "无法验证现有 GitHub 授权：$accessReason"
+}
 
 $installScript = @'
 set -Eeuo pipefail
@@ -281,7 +319,7 @@ fi
 cd "$project"
 bash scripts/deploy-key-access.sh activate
 if [[ "$existing_project" -eq 0 || ! -x .venv/bin/python ]]; then
-  bash scripts/install.sh
+  TK_SYSTEM_PREREQUISITES_READY=1 bash scripts/install.sh
 else
   TK_CODE_ALREADY_UPDATED=1 bash scripts/update.sh
 fi
