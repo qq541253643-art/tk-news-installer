@@ -1,6 +1,13 @@
 $ErrorActionPreference = 'Stop'
 $uri = 'https://raw.githubusercontent.com/qq541253643-art/tk-news-installer/refs/heads/main/installer.ps1'
 $path = Join-Path $env:TEMP 'tk-news-installer.ps1'
-Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $path
+try {
+    Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $path
+}
+catch {
+    Write-Host ('[FAIL] Cannot download installer: ' + $_.Exception.Message) -ForegroundColor Red
+    [void](Read-Host 'Press Enter to close')
+    throw
+}
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $path
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($LASTEXITCODE -ne 0) { throw "Installer failed with exit code $LASTEXITCODE" }

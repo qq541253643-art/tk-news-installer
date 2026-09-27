@@ -11,6 +11,41 @@ $utf8 = [Text.UTF8Encoding]::new($false)
 [Console]::InputEncoding = $utf8
 [Console]::OutputEncoding = $utf8
 $repository = "qq541253643-art/tk-cutout-remix-workbench"
+$desktop = [Environment]::GetFolderPath("Desktop")
+$installLogPath = Join-Path $desktop ("TK安装日志-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".txt")
+$script:installTranscriptStarted = $false
+
+function Stop-InstallTranscript {
+    if (-not $script:installTranscriptStarted) {
+        return
+    }
+    try {
+        Stop-Transcript | Out-Null
+    }
+    catch {
+        # 安装失败信息已经显示，停止日志失败不能覆盖原始错误。
+    }
+    $script:installTranscriptStarted = $false
+}
+
+try {
+    Start-Transcript -LiteralPath $installLogPath -Force | Out-Null
+    $script:installTranscriptStarted = $true
+}
+catch {
+    Write-Warning "无法创建桌面安装日志：$($_.Exception.Message)"
+}
+
+trap {
+    $failureMessage = $_.Exception.Message
+    Write-Host "`n[FAIL] 安装未完成：$failureMessage" -ForegroundColor Red
+    if ($script:installTranscriptStarted) {
+        Write-Host "安装日志：$installLogPath" -ForegroundColor Yellow
+    }
+    Stop-InstallTranscript
+    [void](Read-Host "错误窗口将保留；记录或发送日志后，按 Enter 退出")
+    exit 1
+}
 
 function Invoke-WslScript {
     param(
@@ -256,4 +291,7 @@ Invoke-WslScript -Script $installScript -FailureMessage "联网安装失败"
 
 Write-Host "`n安装完成。" -ForegroundColor Green
 Write-Host "面板地址：http://127.0.0.1:18766"
+Write-Host "桌面入口：TK新闻精品二创工作台.url"
 Write-Host "维护命令：tk-update、tk-doctor、tk-register、tk-authorize"
+Write-Host "安装日志：$installLogPath"
+Stop-InstallTranscript
