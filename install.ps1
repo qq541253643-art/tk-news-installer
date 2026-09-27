@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$uri = 'https://raw.githubusercontent.com/qq541253643-art/tk-news-installer/458bac7/installer.ps1'
+$uri = 'https://raw.githubusercontent.com/qq541253643-art/tk-news-installer/101aaf5/installer.ps1'
 $path = Join-Path $env:TEMP 'tk-news-installer.ps1'
 try {
     Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $path
