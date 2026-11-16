@@ -102,12 +102,20 @@ ensure_packages() {
   command -v python3.13 >/dev/null 2>&1 \
     || [[ -x "$(brew --prefix python@3.13)/bin/python3.13" ]] \
     || fail "Python 3.13 安装后不可用"
-  local ffmpeg_prefix
-  ffmpeg_prefix="$(brew --prefix ffmpeg@7)"
-  [[ -x "$ffmpeg_prefix/bin/ffmpeg" ]] || fail "FFmpeg 7 安装后不可用"
-  [[ -x "$ffmpeg_prefix/bin/ffprobe" ]] || fail "FFprobe 安装后不可用"
-  export PATH="$ffmpeg_prefix/bin:$PATH"
-  ffmpeg -hide_banner -filters 2>/dev/null | grep -q rubberband \
+  local ffmpeg_bin ffmpeg_bin_dir formula_name
+  ffmpeg_bin=""
+  for formula_name in ffmpeg@7 ffmpeg07; do
+    ffmpeg_bin="$(brew list "$formula_name" 2>/dev/null | awk '/\/bin\/ffmpeg$/{print; exit}')"
+    [[ -n "$ffmpeg_bin" ]] && break
+  done
+  if [[ -z "$ffmpeg_bin" ]]; then
+    ffmpeg_bin="$(brew --prefix ffmpeg@7)/bin/ffmpeg"
+  fi
+  [[ -x "$ffmpeg_bin" ]] || fail "FFmpeg 7 安装后不可用"
+  ffmpeg_bin_dir="$(dirname "$ffmpeg_bin")"
+  [[ -x "$ffmpeg_bin_dir/ffprobe" ]] || fail "FFprobe 安装后不可用"
+  export PATH="$ffmpeg_bin_dir:$PATH"
+  "$ffmpeg_bin" -hide_banner -filters 2>/dev/null | grep -q rubberband \
     || fail "FFmpeg 7 缺少 rubberband 声音时长校正组件"
   command -v gh >/dev/null 2>&1 || fail "GitHub CLI 安装后不可用"
 }
