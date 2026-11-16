@@ -105,7 +105,7 @@ ensure_packages() {
   local ffmpeg_bin ffmpeg_bin_dir formula_name
   ffmpeg_bin=""
   for formula_name in ffmpeg@7 ffmpeg07; do
-    ffmpeg_bin="$(brew list "$formula_name" 2>/dev/null | awk '/\/bin\/ffmpeg$/{print; exit}')"
+    ffmpeg_bin="$(brew list "$formula_name" 2>/dev/null | awk '/\/bin\/ffmpeg$/{last=$0} END{if(last) print last}')"
     [[ -n "$ffmpeg_bin" ]] && break
   done
   if [[ -z "$ffmpeg_bin" ]]; then
