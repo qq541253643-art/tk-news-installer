@@ -115,7 +115,7 @@ ensure_packages() {
   ffmpeg_bin_dir="$(dirname "$ffmpeg_bin")"
   [[ -x "$ffmpeg_bin_dir/ffprobe" ]] || fail "FFprobe 安装后不可用"
   export PATH="$ffmpeg_bin_dir:$PATH"
-  "$ffmpeg_bin" -hide_banner -filters 2>/dev/null | grep -q rubberband \
+  "$ffmpeg_bin" -hide_banner -filters 2>/dev/null | grep -F rubberband >/dev/null \
     || fail "FFmpeg 7 缺少 rubberband 声音时长校正组件"
   command -v gh >/dev/null 2>&1 || fail "GitHub CLI 安装后不可用"
 }
