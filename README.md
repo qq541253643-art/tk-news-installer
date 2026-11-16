@@ -1,6 +1,22 @@
 # TK 新闻工作台公开安装器
 
-这是 `TK新闻精品二创工作台` 的公开启动入口。新电脑在**管理员 PowerShell** 运行：
+这是 `TK新闻精品二创工作台` 的公开启动入口。
+
+## Apple Silicon macOS
+
+在 M1/M2/M3/M4 Mac 打开“终端”，只运行这一条命令：
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/qq541253643-art/tk-news-installer/refs/heads/main/install-mac.sh)"
+```
+
+安装器会自动识别并安装 Apple Command Line Tools、Homebrew、Python、带 `rubberband` 的 FFmpeg 7、Git 和 GitHub CLI。首次需要完成一次 GitHub 浏览器授权，用于读取私有主项目；不会把账号密码、永久令牌或私钥写入安装脚本。完成授权后会自动克隆或快进更新项目、安装模型与声音环境、运行测试、安装 LaunchAgent，并打开 `http://127.0.0.1:18766`。
+
+再次运行同一条命令会复用本机依赖、授权、项目目录、模型和下载缓存，并更新到最新版。
+
+## Windows 11 + WSL
+
+新电脑在**管理员 PowerShell** 运行：
 
 ```powershell
 irm https://raw.githubusercontent.com/qq541253643-art/tk-news-installer/refs/heads/main/install.ps1 | iex
