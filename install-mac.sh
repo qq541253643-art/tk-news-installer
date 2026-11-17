@@ -120,11 +120,24 @@ ensure_packages() {
   command -v gh >/dev/null 2>&1 || fail "GitHub CLI 安装后不可用"
 }
 
+existing_project_readable() {
+  local project
+  project="$(select_project_path)"
+  [[ -d "$project/.git" ]] || return 1
+  GIT_TERMINAL_PROMPT=0 git -C "$project" fetch --quiet origin main >/dev/null 2>&1
+}
+
+
 ensure_github_access() {
   if gh auth status --hostname github.com >/dev/null 2>&1 \
     && gh api "repos/$repository" >/dev/null 2>&1; then
     pass "GitHub 授权可读取私有项目"
     gh auth setup-git --hostname github.com
+    return
+  fi
+
+  if existing_project_readable; then
+    pass "已有仓库可通过本机只读密钥读取项目，跳过 GitHub 登录"
     return
   fi
 
@@ -169,8 +182,10 @@ install_or_update_project() {
       || fail "已有项目存在本地改动，未自动覆盖：$project"
     [[ "$(git -C "$project" symbolic-ref --quiet --short HEAD || true)" == "main" ]] \
       || fail "已有项目当前不是 main 分支：$project"
-    git -C "$project" remote set-url origin "https://github.com/$repository.git"
-    git -C "$project" fetch origin main
+    if ! GIT_TERMINAL_PROMPT=0 git -C "$project" fetch origin main; then
+      git -C "$project" remote set-url origin "https://github.com/$repository.git"
+      git -C "$project" fetch origin main
+    fi
     git -C "$project" merge --ff-only FETCH_HEAD
     pass "项目已更新：$project"
   else
